@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tower Defense Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            margin: 20px auto;
+            background-color: #fff;
+            border: 2px solid #000;
+        }
+        #game-canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        button {
+            margin: 5px;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" width="800" height="600"></canvas>
+        <div id="ui">
+            <div>Life: <span id="life">20</span></div>
+            <div>Money: <span id="money">100</span></div>
+            <button id="tower-btn">Tower ($50)</button>
+            <button id="upgrade-btn">Upgrade ($100)</button>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const lifeEl = document.getElementById('life');
+        const moneyEl = document.getElementById('money');
+        const towerBtn = document.getElementById('tower-btn');
+        const upgradeBtn = document.getElementById('upgrade-btn');
+
+        let life = 20;
+        let money = 100;
+        let towers = [];
+        let enemies = [];
+        let selectedTower = null;
+        let wave = 0;
+        let enemySpeed = 1;
+        let gameRunning = true;
+
+        class Tower {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.range = 100;
+                this.damage = 1;
+                this.lastShot = 0;
+                this.shotInterval = 1000;
+            }
+            draw() {
+                ctx.fillStyle = 'blue';
+                ctx.fillRect(this.x - 10, this.y - 10, 20, 20);
+            }
+            update() {
+                const now = Date.now();
+                if (now - this.lastShot > this.shotInterval) {
+                    enemies.forEach(enemy => {
+                        const dist = Math.sqrt((this.x - enemy.x) ** 2 + (this.y - enemy.y) ** 2);
+                        if (dist < this.range) {
+                            enemy.health -= this.damage;
+                            this.lastShot = now;
+                            ctx.beginPath();
+                            ctx.moveTo(this.x, this.y);
+                            ctx.lineTo(enemy.x, enemy.y);
+                            ctx.strokeStyle = 'yellow';
+                            ctx.stroke();
+                            return;
+                        }
+                    });
+                }
+            }
+        }
+
+        class Enemy {
+            constructor() {
+                this.x = 0;
+                this.y = 300;
+                this.health = 3;
+                this.speed = enemySpeed;
+                this.path = [{x: 0, y: 300}, {x: 200, y: 300}, {x: 200, y: 100}, {x: 600, y: 100}, {x: 600, y: 500}, {x: 800, y: 500}];
+                this.pathIndex = 0;
+            }
+            draw() {
+                ctx.fillStyle = 'red';
+                ctx.fillRect(this.x - 5, this.y - 5, 10, 10);
+            }
+            update() {
+                if (this.pathIndex < this.path.length) {
+                    const target = this.path[this.pathIndex];
+                    const dx = target.x - this.x;
+                    const dy = target.y - this.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < this.speed) {
+                        this.x = target.x;
+                        this.y = target.y;
+                        this.pathIndex++;
+                    } else {
+                        this.x += (dx / dist) * this.speed;
+                        this.y += (dy / dist) * this.speed;
+                    }
+                } else {
+                    life--;
+                    lifeEl.textContent = life;
+                    if (life <= 0) {
+                        gameRunning = false;
+                        alert('Game Over!');
+                    }
+                    this.health = 0;
+                }
+                if (this.health <= 0) {
+                    money += 10;
+                    moneyEl.textContent = money;
+                }
+            }
+        }
+
+        function drawPath() {
+            ctx.strokeStyle = 'gray';
+            ctx.lineWidth = 20;
+            ctx.beginPath();
+            ctx.moveTo(0, 300);
+            ctx.lineTo(200, 300);
+            ctx.lineTo(200, 100);
+            ctx.lineTo(600, 100);
+            ctx.lineTo(600, 500);
+            ctx.lineTo(800, 500);
+            ctx.stroke();
+        }
+
+        function spawnEnemy() {
+            enemies.push(new Enemy());
+        }
+
+        function gameLoop() {
+            if (!gameRunning) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawPath();
+            towers.forEach(tower => {
+                tower.draw();
+                tower.update();
+            });
+            enemies = enemies.filter(enemy => {
+                enemy.draw();
+                enemy.update();
+                return enemy.health > 0;
+            });
+            requestAnimationFrame(gameLoop);
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if (selectedTower && money >= 50) {
+                towers.push(new Tower(x, y));
+                money -= 50;
+                moneyEl.textContent = money;
+                selectedTower = null;
+            }
+        });
+
+        towerBtn.addEventListener('click', () => {
+            selectedTower = true;
+        });
+
+        upgradeBtn.addEventListener('click', () => {
+            if (selectedTower && money >= 100) {
+                towers.forEach(tower => {
+                    tower.damage += 1;
+                    tower.range += 20;
+                });
+                money -= 100;
+                moneyEl.textContent = money;
+            }
+        });
+
+        setInterval(spawnEnemy, 2000);
+        gameLoop();
+    </script>
+</body>
+</html>
